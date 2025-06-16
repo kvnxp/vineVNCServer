@@ -2,25 +2,23 @@
 ; jdsample.asm - upsampling (64-bit AVX2)
 ;
 ; Copyright 2009 Pierre Ossman <ossman@cendio.se> for Cendio AB
-; Copyright (C) 2009, 2016, D. R. Commander.
+; Copyright (C) 2009, 2016, 2024, D. R. Commander.
 ; Copyright (C) 2015, Intel Corporation.
+; Copyright (C) 2018, Matthias Räncker.
+; Copyright (C) 2023, Aliaksiej Kandracienka.
 ;
 ; Based on the x86 SIMD extension for IJG JPEG library
 ; Copyright (C) 1999-2006, MIYASAKA Masaru.
 ; For conditions of distribution and use, see copyright notice in jsimdext.inc
 ;
-; This file should be assembled with NASM (Netwide Assembler),
-; can *not* be assembled with Microsoft's MASM or any compatible
-; assembler (including Borland's Turbo Assembler).
-; NASM is available from http://nasm.sourceforge.net/ or
-; http://sourceforge.net/project/showfiles.php?group_id=6208
+; This file should be assembled with NASM (Netwide Assembler) or Yasm.
 
 %include "jsimdext.inc"
 
 ; --------------------------------------------------------------------------
     SECTION     SEG_CONST
 
-    alignz      32
+    ALIGNZ      32
     GLOBAL_DATA(jconst_fancy_upsample_avx2)
 
 EXTN(jconst_fancy_upsample_avx2):
@@ -31,7 +29,7 @@ PW_THREE times 16 dw 3
 PW_SEVEN times 16 dw 7
 PW_EIGHT times 16 dw 8
 
-    alignz      32
+    ALIGNZ      32
 
 ; --------------------------------------------------------------------------
     SECTION     SEG_TEXT
@@ -60,11 +58,11 @@ PW_EIGHT times 16 dw 8
     GLOBAL_FUNCTION(jsimd_h2v1_fancy_upsample_avx2)
 
 EXTN(jsimd_h2v1_fancy_upsample_avx2):
+    ENDBR64
     push        rbp
-    mov         rax, rsp
     mov         rbp, rsp
-    push_xmm    3
-    collect_args 4
+    PUSH_XMM    3
+    COLLECT_ARGS 4
 
     mov         eax, r11d               ; colctr
     test        rax, rax
@@ -76,7 +74,7 @@ EXTN(jsimd_h2v1_fancy_upsample_avx2):
 
     mov         rsi, r12                ; input_data
     mov         rdi, r13
-    mov         rdi, JSAMPARRAY [rdi]   ; output_data
+    mov         rdip, JSAMPARRAY [rdi]  ; output_data
 
     vpxor       ymm0, ymm0, ymm0                 ; ymm0=(all 0's)
     vpcmpeqb    xmm9, xmm9, xmm9
@@ -90,8 +88,8 @@ EXTN(jsimd_h2v1_fancy_upsample_avx2):
     push        rdi
     push        rsi
 
-    mov         rsi, JSAMPROW [rsi]     ; inptr
-    mov         rdi, JSAMPROW [rdi]     ; outptr
+    mov         rsip, JSAMPROW [rsi]    ; inptr
+    mov         rdip, JSAMPROW [rdi]    ; outptr
 
     test        rax, SIZEOF_YMMWORD-1
     jz          short .skip
@@ -185,8 +183,8 @@ EXTN(jsimd_h2v1_fancy_upsample_avx2):
 
 .return:
     vzeroupper
-    uncollect_args 4
-    pop_xmm     3
+    UNCOLLECT_ARGS 4
+    POP_XMM     3
     pop         rbp
     ret
 
@@ -207,22 +205,23 @@ EXTN(jsimd_h2v1_fancy_upsample_avx2):
 ; r12 = JSAMPARRAY input_data
 ; r13 = JSAMPARRAY *output_data_ptr
 
-%define wk(i)   rbp - (WK_NUM - (i)) * SIZEOF_YMMWORD  ; ymmword wk[WK_NUM]
+%define wk(i)   r15 - (WK_NUM - (i)) * SIZEOF_YMMWORD  ; ymmword wk[WK_NUM]
 %define WK_NUM  4
 
     align       32
     GLOBAL_FUNCTION(jsimd_h2v2_fancy_upsample_avx2)
 
 EXTN(jsimd_h2v2_fancy_upsample_avx2):
+    ENDBR64
     push        rbp
-    mov         rax, rsp                     ; rax = original rbp
-    sub         rsp, byte 4
-    and         rsp, byte (-SIZEOF_YMMWORD)  ; align to 256 bits
-    mov         [rsp], rax
-    mov         rbp, rsp                     ; rbp = aligned rbp
-    lea         rsp, [wk(0)]
-    push_xmm    3
-    collect_args 4
+    mov         rbp, rsp
+    push        r15
+    and         rsp, byte (-SIZEOF_YMMWORD)  ; align to 128 bits
+    ; Allocate stack space for wk array.  r15 is used to access it.
+    mov         r15, rsp
+    sub         rsp, (SIZEOF_YMMWORD * WK_NUM)
+    PUSH_XMM    3
+    COLLECT_ARGS 4
     push        rbx
 
     mov         eax, r11d               ; colctr
@@ -235,18 +234,18 @@ EXTN(jsimd_h2v2_fancy_upsample_avx2):
 
     mov         rsi, r12                ; input_data
     mov         rdi, r13
-    mov         rdi, JSAMPARRAY [rdi]   ; output_data
+    mov         rdip, JSAMPARRAY [rdi]  ; output_data
 .rowloop:
     push        rax                     ; colctr
     push        rcx
     push        rdi
     push        rsi
 
-    mov         rcx, JSAMPROW [rsi-1*SIZEOF_JSAMPROW]  ; inptr1(above)
-    mov         rbx, JSAMPROW [rsi+0*SIZEOF_JSAMPROW]  ; inptr0
-    mov         rsi, JSAMPROW [rsi+1*SIZEOF_JSAMPROW]  ; inptr1(below)
-    mov         rdx, JSAMPROW [rdi+0*SIZEOF_JSAMPROW]  ; outptr0
-    mov         rdi, JSAMPROW [rdi+1*SIZEOF_JSAMPROW]  ; outptr1
+    mov         rcxp, JSAMPROW [rsi-1*SIZEOF_JSAMPROW]  ; inptr1(above)
+    mov         rbxp, JSAMPROW [rsi+0*SIZEOF_JSAMPROW]  ; inptr0
+    mov         rsip, JSAMPROW [rsi+1*SIZEOF_JSAMPROW]  ; inptr1(below)
+    mov         rdxp, JSAMPROW [rdi+0*SIZEOF_JSAMPROW]  ; outptr0
+    mov         rdip, JSAMPROW [rdi+1*SIZEOF_JSAMPROW]  ; outptr1
 
     vpxor       ymm8, ymm8, ymm8                 ; ymm8=(all 0's)
     vpcmpeqb    xmm9, xmm9, xmm9
@@ -497,10 +496,10 @@ EXTN(jsimd_h2v2_fancy_upsample_avx2):
 .return:
     pop         rbx
     vzeroupper
-    uncollect_args 4
-    pop_xmm     3
-    mov         rsp, rbp                ; rsp <- aligned rbp
-    pop         rsp                     ; rsp <- original rbp
+    UNCOLLECT_ARGS 4
+    POP_XMM     3
+    lea         rsp, [rbp-8]
+    pop         r15
     pop         rbp
     ret
 
@@ -523,10 +522,10 @@ EXTN(jsimd_h2v2_fancy_upsample_avx2):
     GLOBAL_FUNCTION(jsimd_h2v1_upsample_avx2)
 
 EXTN(jsimd_h2v1_upsample_avx2):
+    ENDBR64
     push        rbp
-    mov         rax, rsp
     mov         rbp, rsp
-    collect_args 4
+    COLLECT_ARGS 4
 
     mov         edx, r11d
     add         rdx, byte (SIZEOF_YMMWORD-1)
@@ -539,13 +538,13 @@ EXTN(jsimd_h2v1_upsample_avx2):
 
     mov         rsi, r12                ; input_data
     mov         rdi, r13
-    mov         rdi, JSAMPARRAY [rdi]   ; output_data
+    mov         rdip, JSAMPARRAY [rdi]  ; output_data
 .rowloop:
     push        rdi
     push        rsi
 
-    mov         rsi, JSAMPROW [rsi]     ; inptr
-    mov         rdi, JSAMPROW [rdi]     ; outptr
+    mov         rsip, JSAMPROW [rsi]    ; inptr
+    mov         rdip, JSAMPROW [rdi]    ; outptr
     mov         rax, rdx                ; colctr
 .columnloop:
 
@@ -589,7 +588,7 @@ EXTN(jsimd_h2v1_upsample_avx2):
 
 .return:
     vzeroupper
-    uncollect_args 4
+    UNCOLLECT_ARGS 4
     pop         rbp
     ret
 
@@ -612,10 +611,10 @@ EXTN(jsimd_h2v1_upsample_avx2):
     GLOBAL_FUNCTION(jsimd_h2v2_upsample_avx2)
 
 EXTN(jsimd_h2v2_upsample_avx2):
+    ENDBR64
     push        rbp
-    mov         rax, rsp
     mov         rbp, rsp
-    collect_args 4
+    COLLECT_ARGS 4
     push        rbx
 
     mov         edx, r11d
@@ -629,14 +628,14 @@ EXTN(jsimd_h2v2_upsample_avx2):
 
     mov         rsi, r12                ; input_data
     mov         rdi, r13
-    mov         rdi, JSAMPARRAY [rdi]   ; output_data
+    mov         rdip, JSAMPARRAY [rdi]  ; output_data
 .rowloop:
     push        rdi
     push        rsi
 
-    mov         rsi, JSAMPROW [rsi]                    ; inptr
-    mov         rbx, JSAMPROW [rdi+0*SIZEOF_JSAMPROW]  ; outptr0
-    mov         rdi, JSAMPROW [rdi+1*SIZEOF_JSAMPROW]  ; outptr1
+    mov         rsip, JSAMPROW [rsi]                   ; inptr
+    mov         rbxp, JSAMPROW [rdi+0*SIZEOF_JSAMPROW] ; outptr0
+    mov         rdip, JSAMPROW [rdi+1*SIZEOF_JSAMPROW] ; outptr1
     mov         rax, rdx                               ; colctr
 .columnloop:
 
@@ -686,7 +685,7 @@ EXTN(jsimd_h2v2_upsample_avx2):
 .return:
     pop         rbx
     vzeroupper
-    uncollect_args 4
+    UNCOLLECT_ARGS 4
     pop         rbp
     ret
 

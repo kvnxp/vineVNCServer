@@ -2,17 +2,14 @@
 ; jquantf.asm - sample data conversion and quantization (64-bit SSE & SSE2)
 ;
 ; Copyright 2009 Pierre Ossman <ossman@cendio.se> for Cendio AB
-; Copyright (C) 2009, 2016, D. R. Commander.
+; Copyright (C) 2009, 2016, 2024, D. R. Commander.
+; Copyright (C) 2018, Matthias Räncker.
 ;
 ; Based on the x86 SIMD extension for IJG JPEG library
 ; Copyright (C) 1999-2006, MIYASAKA Masaru.
 ; For conditions of distribution and use, see copyright notice in jsimdext.inc
 ;
-; This file should be assembled with NASM (Netwide Assembler),
-; can *not* be assembled with Microsoft's MASM or any compatible
-; assembler (including Borland's Turbo Assembler).
-; NASM is available from http://nasm.sourceforge.net/ or
-; http://sourceforge.net/project/showfiles.php?group_id=6208
+; This file should be assembled with NASM (Netwide Assembler) or Yasm.
 
 %include "jsimdext.inc"
 %include "jdct.inc"
@@ -36,10 +33,10 @@
     GLOBAL_FUNCTION(jsimd_convsamp_float_sse2)
 
 EXTN(jsimd_convsamp_float_sse2):
+    ENDBR64
     push        rbp
-    mov         rax, rsp
     mov         rbp, rsp
-    collect_args 3
+    COLLECT_ARGS 3
     push        rbx
 
     pcmpeqw     xmm7, xmm7
@@ -51,8 +48,8 @@ EXTN(jsimd_convsamp_float_sse2):
     mov         rdi, r12
     mov         rcx, DCTSIZE/2
 .convloop:
-    mov         rbx, JSAMPROW [rsi+0*SIZEOF_JSAMPROW]  ; (JSAMPLE *)
-    mov         rdx, JSAMPROW [rsi+1*SIZEOF_JSAMPROW]  ; (JSAMPLE *)
+    mov         rbxp, JSAMPROW [rsi+0*SIZEOF_JSAMPROW]  ; (JSAMPLE *)
+    mov         rdxp, JSAMPROW [rsi+1*SIZEOF_JSAMPROW]  ; (JSAMPLE *)
 
     movq        xmm0, XMM_MMWORD [rbx+rax*SIZEOF_JSAMPLE]
     movq        xmm1, XMM_MMWORD [rdx+rax*SIZEOF_JSAMPLE]
@@ -88,7 +85,7 @@ EXTN(jsimd_convsamp_float_sse2):
     jnz         short .convloop
 
     pop         rbx
-    uncollect_args 3
+    UNCOLLECT_ARGS 3
     pop         rbp
     ret
 
@@ -109,10 +106,10 @@ EXTN(jsimd_convsamp_float_sse2):
     GLOBAL_FUNCTION(jsimd_quantize_float_sse2)
 
 EXTN(jsimd_quantize_float_sse2):
+    ENDBR64
     push        rbp
-    mov         rax, rsp
     mov         rbp, rsp
-    collect_args 3
+    COLLECT_ARGS 3
 
     mov         rsi, r12
     mov         rdx, r11
@@ -145,7 +142,7 @@ EXTN(jsimd_quantize_float_sse2):
     dec         rax
     jnz         short .quantloop
 
-    uncollect_args 3
+    UNCOLLECT_ARGS 3
     pop         rbp
     ret
 

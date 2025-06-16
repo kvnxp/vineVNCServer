@@ -5,7 +5,7 @@
  * Copyright (C) 1991-1996, Thomas G. Lane.
  * Modified 2017 by Guido Vollbeding.
  * libjpeg-turbo Modifications:
- * Copyright (C) 2018, 2021, D. R. Commander.
+ * Copyright (C) 2018, 2021-2023, D. R. Commander.
  * For conditions of distribution and use, see the accompanying README.ijg
  * file.
  *
@@ -28,22 +28,12 @@
 
 /* Macros to deal with unsigned chars as efficiently as compiler allows */
 
-#ifdef HAVE_UNSIGNED_CHAR
 typedef unsigned char U_CHAR;
 #define UCH(x)  ((int)(x))
-#else /* !HAVE_UNSIGNED_CHAR */
-#ifdef __CHAR_UNSIGNED__
-typedef char U_CHAR;
-#define UCH(x)  ((int)(x))
-#else
-typedef char U_CHAR;
-#define UCH(x)  ((int)(x) & 0xFF)
-#endif
-#endif /* HAVE_UNSIGNED_CHAR */
 
 
 #define ReadOK(file, buffer, len) \
-  (JFREAD(file, buffer, len) == ((size_t)(len)))
+  (fread(buffer, 1, len, file) == ((size_t)(len)))
 
 
 /* Private version of data source object */
@@ -373,11 +363,9 @@ start_input_tga(j_compress_ptr cinfo, cjpeg_source_ptr sinfo)
       interlace_type != 0 ||      /* currently don't allow interlaced image */
       width == 0 || height == 0)  /* image width/height must be non-zero */
     ERREXIT(cinfo, JERR_TGA_BADPARMS);
-#ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
   if (sinfo->max_pixels &&
       (unsigned long long)width * height > sinfo->max_pixels)
-    ERREXIT(cinfo, JERR_WIDTH_OVERFLOW);
-#endif
+    ERREXIT1(cinfo, JERR_IMAGE_TOO_BIG, sinfo->max_pixels);
 
   if (subtype > 8) {
     /* It's an RLE-coded file */
@@ -500,6 +488,9 @@ jinit_read_targa(j_compress_ptr cinfo)
 {
   tga_source_ptr source;
 
+  if (cinfo->data_precision != 8)
+    ERREXIT1(cinfo, JERR_BAD_PRECISION, cinfo->data_precision);
+
   /* Create module interface object */
   source = (tga_source_ptr)
     (*cinfo->mem->alloc_small) ((j_common_ptr)cinfo, JPOOL_IMAGE,
@@ -508,9 +499,7 @@ jinit_read_targa(j_compress_ptr cinfo)
   /* Fill in method ptrs, except get_pixel_rows which start_input sets */
   source->pub.start_input = start_input_tga;
   source->pub.finish_input = finish_input_tga;
-#ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
   source->pub.max_pixels = 0;
-#endif
 
   return (cjpeg_source_ptr)source;
 }

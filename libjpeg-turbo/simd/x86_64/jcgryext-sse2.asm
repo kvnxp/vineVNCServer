@@ -1,17 +1,15 @@
 ;
 ; jcgryext.asm - grayscale colorspace conversion (64-bit SSE2)
 ;
-; Copyright (C) 2011, 2016, D. R. Commander.
+; Copyright (C) 2011, 2016, 2024, D. R. Commander.
+; Copyright (C) 2018, Matthias Räncker.
+; Copyright (C) 2023, Aliaksiej Kandracienka.
 ;
 ; Based on the x86 SIMD extension for IJG JPEG library
 ; Copyright (C) 1999-2006, MIYASAKA Masaru.
 ; For conditions of distribution and use, see copyright notice in jsimdext.inc
 ;
-; This file should be assembled with NASM (Netwide Assembler),
-; can *not* be assembled with Microsoft's MASM or any compatible
-; assembler (including Borland's Turbo Assembler).
-; NASM is available from http://nasm.sourceforge.net/ or
-; http://sourceforge.net/project/showfiles.php?group_id=6208
+; This file should be assembled with NASM (Netwide Assembler) or Yasm.
 
 %include "jcolsamp.inc"
 
@@ -31,21 +29,22 @@
 ; r13d = JDIMENSION output_row
 ; r14d = int num_rows
 
-%define wk(i)   rbp - (WK_NUM - (i)) * SIZEOF_XMMWORD  ; xmmword wk[WK_NUM]
+%define wk(i)   r15 - (WK_NUM - (i)) * SIZEOF_XMMWORD  ; xmmword wk[WK_NUM]
 %define WK_NUM  2
 
     align       32
     GLOBAL_FUNCTION(jsimd_rgb_gray_convert_sse2)
 
 EXTN(jsimd_rgb_gray_convert_sse2):
+    ENDBR64
     push        rbp
-    mov         rax, rsp                     ; rax = original rbp
-    sub         rsp, byte 4
+    mov         rbp, rsp
+    push        r15
     and         rsp, byte (-SIZEOF_XMMWORD)  ; align to 128 bits
-    mov         [rsp], rax
-    mov         rbp, rsp                     ; rbp = aligned rbp
-    lea         rsp, [wk(0)]
-    collect_args 5
+    ; Allocate stack space for wk array.  r15 is used to access it.
+    mov         r15, rsp
+    sub         rsp, byte (SIZEOF_XMMWORD * WK_NUM)
+    COLLECT_ARGS 5
     push        rbx
 
     mov         ecx, r10d
@@ -56,7 +55,7 @@ EXTN(jsimd_rgb_gray_convert_sse2):
 
     mov         rsi, r12
     mov         ecx, r13d
-    mov         rdi, JSAMPARRAY [rsi+0*SIZEOF_JSAMPARRAY]
+    mov         rdip, JSAMPARRAY [rsi+0*SIZEOF_JSAMPARRAY]
     lea         rdi, [rdi+rcx*SIZEOF_JSAMPROW]
 
     pop         rcx
@@ -70,8 +69,8 @@ EXTN(jsimd_rgb_gray_convert_sse2):
     push        rsi
     push        rcx                     ; col
 
-    mov         rsi, JSAMPROW [rsi]     ; inptr
-    mov         rdi, JSAMPROW [rdi]     ; outptr0
+    mov         rsip, JSAMPROW [rsi]    ; inptr
+    mov         rdip, JSAMPROW [rdi]    ; outptr0
 
     cmp         rcx, byte SIZEOF_XMMWORD
     jae         near .columnloop
@@ -351,9 +350,9 @@ EXTN(jsimd_rgb_gray_convert_sse2):
 
 .return:
     pop         rbx
-    uncollect_args 5
-    mov         rsp, rbp                ; rsp <- aligned rbp
-    pop         rsp                     ; rsp <- original rbp
+    UNCOLLECT_ARGS 5
+    lea         rsp, [rbp-8]
+    pop         r15
     pop         rbp
     ret
 

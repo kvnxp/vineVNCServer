@@ -3,8 +3,9 @@
  *
  * This file was part of the Independent JPEG Group's software:
  * Copyright (C) 1994-1997, Thomas G. Lane.
+ * Modified 2019 by Guido Vollbeding.
  * libjpeg-turbo Modifications:
- * Copyright (C) 2017, 2021, D. R. Commander.
+ * Copyright (C) 2017, 2019, 2021-2022, D. R. Commander.
  * For conditions of distribution and use, see the accompanying README.ijg
  * file.
  *
@@ -34,10 +35,12 @@ struct cjpeg_source_struct {
   FILE *input_file;
 
   JSAMPARRAY buffer;
-  JDIMENSION buffer_height;
-#ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
-  JDIMENSION max_pixels;
+  J12SAMPARRAY buffer12;
+#ifdef C_LOSSLESS_SUPPORTED
+  J16SAMPARRAY buffer16;
 #endif
+  JDIMENSION buffer_height;
+  JDIMENSION max_pixels;
 };
 
 
@@ -59,9 +62,9 @@ struct djpeg_dest_struct {
   void (*finish_output) (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo);
   /* Re-calculate buffer dimensions based on output dimensions (for use with
      partial image decompression.)  If this is NULL, then the output format
-     does not support partial image decompression (BMP and RLE, in particular,
-     cannot support partial decompression because they use an inversion buffer
-     to write the image in bottom-up order.) */
+     does not support partial image decompression (BMP, in particular, cannot
+     support partial decompression because it uses an inversion buffer to write
+     the image in bottom-up order.) */
   void (*calc_buffer_dimensions) (j_decompress_ptr cinfo,
                                   djpeg_dest_ptr dinfo);
 
@@ -74,6 +77,10 @@ struct djpeg_dest_struct {
    * height is buffer_height.
    */
   JSAMPARRAY buffer;
+  J12SAMPARRAY buffer12;
+#ifdef D_LOSSLESS_SUPPORTED
+  J16SAMPARRAY buffer16;
+#endif
   JDIMENSION buffer_height;
 };
 
@@ -90,6 +97,9 @@ struct cdjpeg_progress_mgr {
   struct jpeg_progress_mgr pub; /* fields known to JPEG library */
   int completed_extra_passes;   /* extra passes completed */
   int total_extra_passes;       /* total extra */
+  JDIMENSION max_scans;         /* abort if the number of scans exceeds this
+                                   value and the value is non-zero */
+  boolean report;               /* whether or not to report progress */
   /* last printed percentage stored here to avoid multiple printouts */
   int percent_done;
 };
@@ -104,11 +114,23 @@ EXTERN(cjpeg_source_ptr) jinit_read_bmp(j_compress_ptr cinfo,
 EXTERN(djpeg_dest_ptr) jinit_write_bmp(j_decompress_ptr cinfo, boolean is_os2,
                                        boolean use_inversion_array);
 EXTERN(cjpeg_source_ptr) jinit_read_gif(j_compress_ptr cinfo);
-EXTERN(djpeg_dest_ptr) jinit_write_gif(j_decompress_ptr cinfo);
+EXTERN(cjpeg_source_ptr) j12init_read_gif(j_compress_ptr cinfo);
+#ifdef C_LOSSLESS_SUPPORTED
+EXTERN(cjpeg_source_ptr) j16init_read_gif(j_compress_ptr cinfo);
+#endif
+EXTERN(djpeg_dest_ptr) jinit_write_gif(j_decompress_ptr cinfo, boolean is_lzw);
+EXTERN(djpeg_dest_ptr) j12init_write_gif(j_decompress_ptr cinfo,
+                                         boolean is_lzw);
 EXTERN(cjpeg_source_ptr) jinit_read_ppm(j_compress_ptr cinfo);
+EXTERN(cjpeg_source_ptr) j12init_read_ppm(j_compress_ptr cinfo);
+#ifdef C_LOSSLESS_SUPPORTED
+EXTERN(cjpeg_source_ptr) j16init_read_ppm(j_compress_ptr cinfo);
+#endif
 EXTERN(djpeg_dest_ptr) jinit_write_ppm(j_decompress_ptr cinfo);
-EXTERN(cjpeg_source_ptr) jinit_read_rle(j_compress_ptr cinfo);
-EXTERN(djpeg_dest_ptr) jinit_write_rle(j_decompress_ptr cinfo);
+EXTERN(djpeg_dest_ptr) j12init_write_ppm(j_decompress_ptr cinfo);
+#ifdef D_LOSSLESS_SUPPORTED
+EXTERN(djpeg_dest_ptr) j16init_write_ppm(j_decompress_ptr cinfo);
+#endif
 EXTERN(cjpeg_source_ptr) jinit_read_targa(j_compress_ptr cinfo);
 EXTERN(djpeg_dest_ptr) jinit_write_targa(j_decompress_ptr cinfo);
 
@@ -125,6 +147,7 @@ EXTERN(boolean) set_sample_factors(j_compress_ptr cinfo, char *arg);
 /* djpeg support routines (in rdcolmap.c) */
 
 EXTERN(void) read_color_map(j_decompress_ptr cinfo, FILE *infile);
+EXTERN(void) read_color_map_12(j_decompress_ptr cinfo, FILE *infile);
 
 /* common support routines (in cdjpeg.c) */
 
@@ -154,6 +177,3 @@ EXTERN(FILE *) write_stdout(void);
 #ifndef EXIT_WARNING
 #define EXIT_WARNING  2
 #endif
-
-#define IsExtRGB(cs) \
-  (cs == JCS_RGB || (cs >= JCS_EXT_RGB && cs <= JCS_EXT_ARGB))

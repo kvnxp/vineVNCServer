@@ -2,17 +2,14 @@
 ; jcsample.asm - downsampling (64-bit SSE2)
 ;
 ; Copyright 2009 Pierre Ossman <ossman@cendio.se> for Cendio AB
-; Copyright (C) 2009, 2016, D. R. Commander.
+; Copyright (C) 2009, 2016, 2024, D. R. Commander.
+; Copyright (C) 2018, Matthias Räncker.
 ;
 ; Based on the x86 SIMD extension for IJG JPEG library
 ; Copyright (C) 1999-2006, MIYASAKA Masaru.
 ; For conditions of distribution and use, see copyright notice in jsimdext.inc
 ;
-; This file should be assembled with NASM (Netwide Assembler),
-; can *not* be assembled with Microsoft's MASM or any compatible
-; assembler (including Borland's Turbo Assembler).
-; NASM is available from http://nasm.sourceforge.net/ or
-; http://sourceforge.net/project/showfiles.php?group_id=6208
+; This file should be assembled with NASM (Netwide Assembler) or Yasm.
 
 %include "jsimdext.inc"
 
@@ -42,10 +39,10 @@
     GLOBAL_FUNCTION(jsimd_h2v1_downsample_sse2)
 
 EXTN(jsimd_h2v1_downsample_sse2):
+    ENDBR64
     push        rbp
-    mov         rax, rsp
     mov         rbp, rsp
-    collect_args 6
+    COLLECT_ARGS 6
 
     mov         ecx, r13d
     shl         rcx, 3                  ; imul rcx,DCTSIZE (rcx = output_cols)
@@ -70,7 +67,7 @@ EXTN(jsimd_h2v1_downsample_sse2):
     push        rax
     push        rcx
 
-    mov         rdi, JSAMPROW [rsi]
+    mov         rdip, JSAMPROW [rsi]
     add         rdi, rdx
     mov         al, JSAMPLE [rdi-1]
 
@@ -105,8 +102,8 @@ EXTN(jsimd_h2v1_downsample_sse2):
     push        rdi
     push        rsi
 
-    mov         rsi, JSAMPROW [rsi]     ; inptr
-    mov         rdi, JSAMPROW [rdi]     ; outptr
+    mov         rsip, JSAMPROW [rsi]    ; inptr
+    mov         rdip, JSAMPROW [rdi]    ; outptr
 
     cmp         rcx, byte SIZEOF_XMMWORD
     jae         short .columnloop
@@ -159,7 +156,7 @@ EXTN(jsimd_h2v1_downsample_sse2):
     jg          near .rowloop
 
 .return:
-    uncollect_args 6
+    UNCOLLECT_ARGS 6
     pop         rbp
     ret
 
@@ -187,10 +184,10 @@ EXTN(jsimd_h2v1_downsample_sse2):
     GLOBAL_FUNCTION(jsimd_h2v2_downsample_sse2)
 
 EXTN(jsimd_h2v2_downsample_sse2):
+    ENDBR64
     push        rbp
-    mov         rax, rsp
     mov         rbp, rsp
-    collect_args 6
+    COLLECT_ARGS 6
 
     mov         ecx, r13d
     shl         rcx, 3                  ; imul rcx,DCTSIZE (rcx = output_cols)
@@ -215,7 +212,7 @@ EXTN(jsimd_h2v2_downsample_sse2):
     push        rax
     push        rcx
 
-    mov         rdi, JSAMPROW [rsi]
+    mov         rdip, JSAMPROW [rsi]
     add         rdi, rdx
     mov         al, JSAMPLE [rdi-1]
 
@@ -250,9 +247,9 @@ EXTN(jsimd_h2v2_downsample_sse2):
     push        rdi
     push        rsi
 
-    mov         rdx, JSAMPROW [rsi+0*SIZEOF_JSAMPROW]  ; inptr0
-    mov         rsi, JSAMPROW [rsi+1*SIZEOF_JSAMPROW]  ; inptr1
-    mov         rdi, JSAMPROW [rdi]                    ; outptr
+    mov         rdxp, JSAMPROW [rsi+0*SIZEOF_JSAMPROW]  ; inptr0
+    mov         rsip, JSAMPROW [rsi+1*SIZEOF_JSAMPROW]  ; inptr1
+    mov         rdip, JSAMPROW [rdi]                    ; outptr
 
     cmp         rcx, byte SIZEOF_XMMWORD
     jae         short .columnloop
@@ -320,7 +317,7 @@ EXTN(jsimd_h2v2_downsample_sse2):
     jg          near .rowloop
 
 .return:
-    uncollect_args 6
+    UNCOLLECT_ARGS 6
     pop         rbp
     ret
 

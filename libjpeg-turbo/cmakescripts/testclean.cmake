@@ -30,6 +30,15 @@ file(GLOB FILES
   *_411_*.ppm
   *_411_*.jpg
   *_411.yuv
+  *_441_*.bmp
+  *_441_*.png
+  *_441_*.ppm
+  *_441_*.jpg
+  *_441.yuv
+  *_LOSSL*S_*.bmp
+  *_LOSSL*S_*.ppm
+  *_LOSSL*S_*.jpg
+  croptest.log
   tjbenchtest*.log
   tjexampletest*.log)
 
